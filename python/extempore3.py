@@ -100,6 +100,9 @@ def send_block():
     """ Send the text determined by empty lines . """
     send_string(get_block())
 
+def send_commented_block():
+    """ Send the text determined by empty lines . """
+    send_string(get_commented_block())
 
 def send_bracket_selection():
     """ Send the text determined by the '[' and ']' marks. """
