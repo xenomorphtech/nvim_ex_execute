@@ -1,45 +1,65 @@
 import vim
-import telnetlib
 import threading
+import socket
+import sys
+import select
+import struct
 
-HOST = "localhost"
+HOST = "127.0.0.1"
 PORT = 7099
 
-telnet = None
+sock = None
+read_to_buf = False
 
+def set_tobuf(val):
+    global read_to_buf
+    read_to_buf = val
 
 def output_poller():
-    global telnet
-    if not telnet:
+    global read_to_buf
+    global sock
+    if not sock:
         return
     output = read_output()
     if output != "":
-        print(output)
+       if read_to_buf:
+           vim.async_call(tappend, output)
+       else:
+           vim.async_call(tprint, output)
     threading.Timer(0.3, output_poller).start()
 
 
-def connect():
+def connect(host = HOST, port = PORT, password = ""):
     """ Opens the connection """
-    global telnet
-    telnet = telnetlib.Telnet(HOST, PORT)
+    global sock
+
+    # Create a TCP/IP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # Connect the socket to the port where the server is listening
+    server_address = (host, port)
+    print('connecting to %s port %s' % server_address)
+    sock.connect(server_address)
+    sock.send(bytes("auth:" + password, "utf-8"))
     output_poller()
 
 
 def close():
-    global telnet
-    if telnet:
-        telnet.close()
-        telnet = None
+    global sock
+    if sock:
+        sock.close()
+        sock = None
 
 
 def send_string(value):
     """ Sends the desired string through the connection """
-    global telnet
-    if not telnet:
+    global sock
+    if not sock:
         print("Not connected")
         return
     if value:
-        telnet.write(bytes(value, 'utf-8'))
+        sock.send(struct.pack("I", len(bytes(value, 'utf-8'))))
+        sock.sendall(bytes(value, 'utf-8'))
 
 
 def get_user_input():
@@ -71,10 +91,14 @@ def send_enclosing_block():
 def send_entire_file():
     send_string(get_entire_file())
 
-
 def send_selection():
     """ Send the text determined by the '<' and '>' marks. """
     send_string(get_selection())
+
+
+def send_block():
+    """ Send the text determined by empty lines . """
+    send_string(get_block())
 
 
 def send_bracket_selection():
@@ -91,6 +115,18 @@ def get_entire_file():
 def send_path_file(path):
     file_data = open(path).read()
     send_string(file_data+"\r\n")
+
+
+def get_block():
+    lines = vim.current.buffer
+    start_selection, col = vim.current.buffer.mark("{")
+    # vim index is not 0 based, facepalm.jpg
+    start_selection -= 1
+    end_selection, col = vim.current.buffer.mark("}")
+
+    result = join_lines(lines[start_selection:end_selection])
+
+    return result
 
 
 def get_selection():
@@ -115,6 +151,38 @@ def get_bracket_selection():
     result = join_lines(lines[start_selection:end_selection])
 
     return result
+
+def get_commented_block():
+    current_line, current_col = vim.current.window.cursor
+    # facepalm.jpg, really vim?
+    current_line -= 1
+    buffer_lines = vim.current.buffer
+    result = get_commented_block_line_numbers(current_line, buffer_lines)
+    if result is None:
+        return None
+    start_line, end_line = result
+
+    result = join_lines(vim.current.buffer[start_line:end_line+1])
+    return result
+
+
+def get_commented_block_line_numbers(line_num, lines):
+    top_placeholder = line_num
+    # lines from current to beginning, reversed
+    for line in lines[:line_num+1][::-1]:
+        if line.startswith("#"):
+            break
+        top_placeholder -= 1
+
+    bottom_placeholder = top_placeholder
+    # lines from top_placeholder to end
+    for line in lines[top_placeholder+1:]:
+        if line.startswith("#"):
+            break
+        bottom_placeholder += 1
+
+    print(bottom_placeholder)
+    return (top_placeholder, bottom_placeholder)
 
 
 def get_enclosing_block():
@@ -174,25 +242,29 @@ def get_enclosing_block_line_numbers(line_num, lines):
 
 
 def join_lines(lines):
-    """ Join lines by spaces, remove any comments, and end with newline"""
-    result = ""
-    for line in lines:
-        # remove comment; TODO: do less hacky
-        result += line.split(";")[0]
-
-    result += "\r\n"
-    return result
+    return "\r\n".join(lines)
 
 
 def read_output():
-    global telnet
+    global sock
     to_return = b""
-    if not telnet:
-        print("Not connected")
+    if not sock:
+        vim.async_call(tprint, "Not connected")
         return to_return
+    ready_to_read, ready_to_write, in_error = select.select([sock], [], [sock], 0)
+
+    if in_error != []:
+        sock = None
     try:
-        to_return = telnet.read_eager()
+       if ready_to_read != []: 
+         to_return = sock.recv(4095)
     except:
-        print("Error reading from extempore connection")
-        telnet = None
+        vim.async_call(tprint, "Error reading from extempore connection")
+        sock = None
     return to_return.decode()
+
+def tprint(text):
+    print(text) 
+
+def tappend(text):
+    vim.current.buffer.append(text)

@@ -48,7 +48,7 @@ augroup extemporeMaps
   autocmd FileType extempore nnoremap <buffer> <Leader>o :ExtemporeOpenConnection() <CR>
   autocmd FileType extempore nnoremap <buffer> <Leader>O :ExtemporeCloseConnection() <CR>
   autocmd FileType extempore nnoremap <buffer> <Leader>x :ExtemporeCloseConnection() <CR>
-  autocmd FileType extempore nnoremap <buffer> <Leader>w :ExtemporeSendEnclosingBlock() <CR>
+  autocmd FileType extempore nnoremap <buffer> <Leader>w :ExtemporeSendCommentedBlock() <CR>
   autocmd FileType extempore nnoremap <buffer> <Leader>a :ExtemporeSendEntireFile() <CR>
   autocmd FileType extempore nnoremap <buffer> <Leader>s :ExtemporeSendSelection() <CR>
 
@@ -96,6 +96,7 @@ function! s:define_extempore_commands(py_version)
   exe 'command! -nargs=* ExtemporeOutputPoller :python' . a:py_version . ' output_poller()'
   exe 'command! -nargs=* ExtemporeCloseConnection :python' . a:py_version . ' close()'
   exe 'command! -nargs=* ExtemporePanic :python' . a:py_version . ' panic()'
+  exe 'command! -nargs=* ExtemporeSendCommentedBlock :python' . a:py_version . ' send_enclosing_block()'
   exe 'command! -nargs=* ExtemporeSendEnclosingBlock :python' . a:py_version . ' send_enclosing_block()'
   exe 'command! -nargs=* ExtemporeSendEntireFile :python' . a:py_version . ' send_entire_file()'
   exe 'command! -nargs=* ExtemporeSendSelection :python' . a:py_version . ' send_selection()'

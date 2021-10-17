@@ -116,6 +116,41 @@ def get_bracket_selection():
 
     return result
 
+def get_commented_block():
+    current_line, current_col = vim.current.window.cursor
+    # facepalm.jpg, really vim?
+    current_line -= 1
+    buffer_lines = vim.current.buffer
+    result = get_enclosing_block_line_numbers(current_line, buffer_lines)
+    if result is None:
+        return None
+    start_line, end_line = result
+
+    result = join_lines(vim.current.buffer[start_line:end_line+1])
+    return result
+
+
+def get_commented_block_line_numbers(line_num, lines):
+    top_placeholder = line_num
+    # lines from current to beginning, reversed
+    for line in lines[:line_num+1][::-1]:
+        if line.startswith("#"):
+            break
+        top_placeholder -= 1
+
+    bottom_placeholder = top_placeholder
+    # lines from top_placeholder to end
+    for line in lines[top_placeholder:]:
+        if line.startswith("#"):
+            break
+        bottom_placeholder += 1
+
+    # if entire code block is above the current line, return None
+    if bottom_placeholder < line_num:
+        return None
+    else:
+        return (top_placeholder, bottom_placeholder)
+
 
 def get_enclosing_block():
     current_line, current_col = vim.current.window.cursor
@@ -131,6 +166,7 @@ def get_enclosing_block():
     return result
 
 
+ 
 def get_enclosing_block_line_numbers(line_num, lines):
     """ Given the current line number, and a list of lines representing
         the buffer, return the line indexes of the beginning and end of
