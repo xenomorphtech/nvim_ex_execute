@@ -10,6 +10,7 @@ PORT = 7099
 
 sock = None
 read_to_buf = False
+buffer = b""
 
 def set_tobuf(val):
     global read_to_buf
@@ -18,14 +19,21 @@ def set_tobuf(val):
 def output_poller():
     global read_to_buf
     global sock
+    global buffer
     if not sock:
         return
+
     output = read_output()
-    if output != "":
-       if read_to_buf:
-           vim.async_call(tappend, output)
-       else:
-           vim.async_call(tprint, output)
+    buffer += output
+    if len(buffer) > 4:
+        (l,) = struct.unpack(">I", buffer[:4])    
+        if l >= len(buffer) - 4:
+            output = (buffer[4:][:l+4]).decode()
+            buffer = buffer[l + 4:]
+            if read_to_buf:
+                vim.async_call(tappend, output)
+            else:
+                vim.async_call(tprint, output)
     threading.Timer(0.3, output_poller).start()
 
 
@@ -40,7 +48,8 @@ def connect(host = HOST, port = PORT, password = ""):
     server_address = (host, port)
     print('connecting to %s port %s' % server_address)
     sock.connect(server_address)
-    sock.send(bytes("auth:" + password, "utf-8"))
+    val = bytes("auth:" + password, "utf-8")
+    sock.send(struct.pack(">I", len(val)) + val)
     output_poller()
 
 
@@ -58,7 +67,7 @@ def send_string(value):
         print("Not connected")
         return
     if value:
-        sock.send(struct.pack("I", len(bytes(value, 'utf-8'))))
+        sock.send(struct.pack(">I", len(bytes(value, 'utf-8'))))
         sock.sendall(bytes(value, 'utf-8'))
 
 
@@ -264,7 +273,7 @@ def read_output():
     except:
         vim.async_call(tprint, "Error reading from extempore connection")
         sock = None
-    return to_return.decode()
+    return to_return
 
 def tprint(text):
     print(text) 
